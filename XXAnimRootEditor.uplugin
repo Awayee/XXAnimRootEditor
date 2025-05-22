@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "XXAnimRootEditor",
+	"Description": "Remove transform of root bone in animation sequences but maintain the final pose.",
+	"Category": "Other",
+	"CreatedBy": "XX",
+	"CreatedByURL": "https://github.com/Awayee/XXAnimRootEditor",
+	"DocsURL": "https://github.com/Awayee/XXAnimRootEditor",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "XXAnimRootEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	]
+}
