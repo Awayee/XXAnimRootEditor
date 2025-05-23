@@ -3,19 +3,21 @@
 #include "XXAnimRootEditor.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Input/SSlider.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Animation/AnimSequence.h"
 #include "Components/ArrowComponent.h"
 #include "ContentBrowserModule.h"
 #include "IContentBrowserSingleton.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AnimPreviewInstance.h"
-#include "RootMotionRemoverByAnimSequenceData.h"
+#include "XXRootMotionRemover.h"
 #include "SMultiFlagsCheckBox.h"
+#include "Animation/DebugSkelMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 // UnrealEd
 #include "EditorViewportClient.h"
 #include "AssetEditorModeManager.h"
-#include "Animation/DebugSkelMeshComponent.h"
 #include "Editor/UnrealEdEngine.h"
 #include "UnrealEdGlobals.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
@@ -58,7 +60,7 @@ FXXAnimRootEditorViewportClient::FXXAnimRootEditorViewportClient(FPreviewScene* 
 	DrawHelper.bDrawPivot = true;// Draw axis
 	DrawHelper.PerspectiveGridSize = UE_OLD_HALF_WORLD_MAX1;
 	SetRealtime(true); // Realtime mode
-
+	SetCameraFollow(true);
 	// AddComponents
 	// skl
 	SklMeshComp = NewObject<UDebugSkelMeshComponent>(GetWorld(), TEXT("PreviewMesh"));
@@ -84,6 +86,7 @@ FXXAnimRootEditorViewportClient::FXXAnimRootEditorViewportClient(FPreviewScene* 
 	FTransform ArrowTransform = FTransform::Identity;
 	ArrowTransform.SetRotation(FQuat::MakeFromRotationVector(FVector3d(0, 0, PI/2)));
 	PreviewScene->AddComponent(ArrowComp, ArrowTransform, false);
+	ArrowLastLocation = ArrowTransform.GetLocation();
 
 	GetWorld()->SetBegunPlay(false);
 }
@@ -93,14 +96,24 @@ void FXXAnimRootEditorViewportClient::SetAsset(UAnimSequence* AnimAsset) {
 	if (!SklMeshAsset) {
 		SklMeshAsset = AnimAsset->GetSkeleton()->GetPreviewMesh();
 	}
+	const bool bPreAnimAsset = !!SklMeshComp->GetSkeletalMeshAsset();
 	SklMeshComp->SetSkeletalMesh(SklMeshAsset);
 	SklMeshComp->InitAnim(true);
 	// Only PreviewInstance works
 	SklMeshComp->EnablePreview(true, AnimAsset);
 	ArrowComp->AttachToComponent(SklMeshComp, FAttachmentTransformRules::KeepRelativeTransform, FName("root"));
-	ResetView();
+	if(!bPreAnimAsset) {
+		ResetView();
+	}
 	// Update scene
 	Invalidate();
+}
+
+void FXXAnimRootEditorViewportClient::ResetPlay() {
+	SklMeshComp->SetWorldTransform(FTransform::Identity);
+	if(UAnimPreviewInstance* Inst = GetAnimPreviewInstance()) {
+		Inst->SetPosition(0.0f, false);
+	}
 }
 
 void FXXAnimRootEditorViewportClient::ResetView() {
@@ -108,9 +121,20 @@ void FXXAnimRootEditorViewportClient::ResetView() {
 	SetLookAtLocation(FVector::Zero());
 	const FVector Extent = SklMeshComp->GetLocalBounds().GetBox().GetExtent();
 	// Scale the height view to contain the mesh.
-	const float BoxHeight = Extent.Z * 2.5f;
+	float BoxSize = Extent.Z * 2.5f;
+	// Get aspect ratio to resize
+	{
+		float TempAspectRatio = AspectRatio;
+		FIntPoint ViewportSize = Viewport->GetSizeXY();
+		if (!bUseControllingActorViewInfo && ViewportSize.X > 0 && ViewportSize.Y > 0){
+			TempAspectRatio = Viewport->GetDesiredAspectRatio();
+		}
+		if(TempAspectRatio > 1.0f) {
+			BoxSize *= TempAspectRatio;
+		}
+	}
 	const float TanHalfFov = FMath::Tan(FMath::DegreesToRadians(ViewFOV * 0.5f));
-	const float DistanceToCenter = BoxHeight / TanHalfFov;
+	const float DistanceToCenter = BoxSize / TanHalfFov;
 	const FRotator ViewRotation = FRotator::MakeFromEuler(DefaultViewEuler);
 	SetViewRotation(ViewRotation);
 	const FVector ViewForward = ViewRotation.Quaternion().GetForwardVector();
@@ -157,6 +181,10 @@ void FXXAnimRootEditorViewportClient::SetPlayTime(float InTime) {
 	}
 }
 
+void FXXAnimRootEditorViewportClient::SetCameraFollow(bool bFllow) {
+	CameraFollow = bFllow;
+}
+
 UAnimPreviewInstance* FXXAnimRootEditorViewportClient::GetAnimPreviewInstance() {
 	return SklMeshComp ? SklMeshComp->PreviewInstance : nullptr;
 }
@@ -166,10 +194,12 @@ void FXXAnimRootEditorViewportClient::UpdateSklMeshTransform() {
 	const FBoxSphereBounds Bounds = EditorFloorComp->CalcBounds(EditorFloorComp->GetComponentTransform());
 	SklMeshComp->ConsumeRootMotion(Bounds.GetBox().Min, Bounds.GetBox().Max);
 	// Focus on arrow location
-	const FVector ArrowLocation = ArrowComp->GetComponentLocation();
-	SetViewLocation(GetViewLocation() + ArrowLocation - ArrowLastLocation);
-	SetLookAtLocation(ArrowLocation);
-	ArrowLastLocation = ArrowLocation;
+	if(CameraFollow) {
+		const FVector ArrowLocation = ArrowComp->GetComponentLocation();
+		SetViewLocation(GetViewLocation() + ArrowLocation - ArrowLastLocation);
+		SetLookAtLocation(ArrowLocation);
+		ArrowLastLocation = ArrowLocation;
+	}
 }
 
 // Details
@@ -184,6 +214,12 @@ void SXXAnimRootEditorDetails::Construct(const FArguments& InArgs) {
 			]
 			+ SVerticalBox::Slot().AutoHeight()[
 				SNew(SBorder)
+			]
+			+ SVerticalBox::Slot().AutoHeight()[
+				SNew(SCheckBox)
+					.IsChecked(true)
+					.OnCheckStateChanged_Raw(this, &SXXAnimRootEditorDetails::WidgetCameraFollowChanged)
+					.Content()[SNew(STextBlock).Text(LOCTEXT("CameraFollow", "Camera Follow"))]
 			]
 			+ SVerticalBox::Slot().AutoHeight()[
 				SNew(STextBlock).Text_Lambda([this]() {
@@ -284,7 +320,7 @@ void SXXAnimRootEditorDetails::Construct(const FArguments& InArgs) {
 
 void SXXAnimRootEditorDetails::SetAsset(UAnimSequence* AnimAsset) {
 	CurrentAnimAsset = AnimAsset;
-	RootMotionRemover.Reset(new FRootMotionRemoverByAnimSequenceData(AnimAsset));
+	RootMotionRemover.Reset(new FXXRootMotionRemover(AnimAsset));
 	FrameCount = AnimAsset->GetNumberOfSampledKeys();
 	FrameStart = 0;
 	FrameEnd = FrameCount - 1;
@@ -317,10 +353,8 @@ void SXXAnimRootEditorDetails::ManualPause() {
 void SXXAnimRootEditorDetails::ManualReset() {
 	SetCurrentFrame(0);
 	if (Viewport) {
-		Viewport->SetPlayTime(0.0f);
-		Viewport->ResetView();
+		Viewport->ResetPlay();
 	}
-	ManualPause();
 }
 
 void SXXAnimRootEditorDetails::SetCurrentFrame(int InFrame) {
@@ -344,6 +378,12 @@ FReply SXXAnimRootEditorDetails::OnRestoreRootMotion() {
 	RootMotionRemover->RestoreRootMotion(FrameStart, FrameEnd+1);
 	ManualReset();
 	return FReply::Handled();
+}
+
+void SXXAnimRootEditorDetails::WidgetCameraFollowChanged(ECheckBoxState InState) {
+	if(Viewport) {
+		Viewport->SetCameraFollow(ECheckBoxState::Checked == InState);
+	}
 }
 
 void SXXAnimRootEditorDetails::WidgetSetCurrentFrame(float Value) {
@@ -432,10 +472,10 @@ void SXXAnimRootEditorUI::SetAsset(UAnimSequence* Asset) {
 		SAssignNew(WidgetDetails, SXXAnimRootEditorDetails);
 		ChildSlot[
 			SNew(SSplitter).Orientation(EOrientation::Orient_Horizontal)
-				+ SSplitter::Slot().Value(0.66f).SizeRule(SSplitter::FractionOfParent)[
+				+ SSplitter::Slot().Value(0.7f).SizeRule(SSplitter::FractionOfParent)[
 					SAssignNew(Viewport, SXXAnimRootEditorViewport)
 				]
-				+ SSplitter::Slot().Value(0.33f).SizeRule(SSplitter::FractionOfParent)[
+				+ SSplitter::Slot().Value(0.3f).SizeRule(SSplitter::FractionOfParent)[
 					WidgetDetails.ToSharedRef()
 				]
 		];

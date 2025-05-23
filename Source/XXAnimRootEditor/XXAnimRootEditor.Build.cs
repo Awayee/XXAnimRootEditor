@@ -28,6 +28,8 @@ public class XXAnimRootEditor : ModuleRules
 				"AnimGraph",
 				"ContentBrowser",
 				"AssetRegistry",
+                "AnimationBlueprintLibrary",
+                "AnimationModifiers",
 			}
 		);
 	}

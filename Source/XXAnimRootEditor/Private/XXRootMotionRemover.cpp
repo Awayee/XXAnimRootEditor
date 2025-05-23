@@ -1,14 +1,17 @@
-#include "RootMotionRemoverByAnimSequenceData.h"
+#include "XXRootMotionRemover.h"
 #include "XXAnimRootEditor.h"
+#include "Animation/Skeleton.h"
 
-FRootMotionRemoverByAnimSequenceData::FRootMotionRemoverByAnimSequenceData(UAnimSequence* InAnimSequence): AnimSequence(InAnimSequence) {
+static constexpr int32 ROOT_BONE_INDEX = 0;
+
+FXXRootMotionRemover::FXXRootMotionRemover(UAnimSequence* InAnimSequence): AnimSequence(InAnimSequence) {
 	check(AnimSequence);
 }
 
-FRootMotionRemoverByAnimSequenceData::~FRootMotionRemoverByAnimSequenceData() {
+FXXRootMotionRemover::~FXXRootMotionRemover() {
 }
 
-FTransform FRootMotionRemoverByAnimSequenceData::GetRootBoneTransform(int32 InFrame) {
+FTransform FXXRootMotionRemover::GetRootBoneTransform(int32 InFrame) {
 	if(USkeleton* Skeleton = AnimSequence->GetSkeleton()) {
 		if (IAnimationDataModel* DataModel = AnimSequence->GetDataModel()) {
 			FName BoneName = Skeleton->GetReferenceSkeleton().GetBoneName(ROOT_BONE_INDEX);
@@ -19,7 +22,7 @@ FTransform FRootMotionRemoverByAnimSequenceData::GetRootBoneTransform(int32 InFr
 	return FTransform::Identity;
 }
 
-bool FRootMotionRemoverByAnimSequenceData::RemoveRootMotion(EXXRootMotionRemoveFlag Flags, int32 FrameStart, int32 FrameEnd) {
+bool FXXRootMotionRemover::RemoveRootMotion(EXXRootMotionRemoveFlag Flags, int32 FrameStart, int32 FrameEnd) {
 	if (EXXRootMotionRemoveFlag::None == Flags) {
 		UE_LOG(XXAnimRootEditor, Warning, TEXT("[RemoveRootMotion] No flags checked!"));
 		return false;
@@ -100,32 +103,40 @@ bool FRootMotionRemoverByAnimSequenceData::RemoveRootMotion(EXXRootMotionRemoveF
 
 		// Translation
 		if(EnumHasAnyFlags(Flags, EXXRootMotionRemoveFlag::Translation)) {
-			FVector RootBoneTranslation = RootTransform.GetTranslation();
-			if(EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationX)) {
-				RootBoneTranslation.X = 0.0;
+			FVector BoneTranslation = RootTransform.GetTranslation();
+			if(!BoneTranslation.IsNearlyZero()) {
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationX)) {
+					BoneTranslation.X = 0.0;
+				}
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationY)) {
+					BoneTranslation.Y = 0.0;
+				}
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationZ)) {
+					BoneTranslation.Z = 0.0;
+				}
+				RootTransform.SetTranslation(BoneTranslation);
 			}
-			if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationY)) {
-				RootBoneTranslation.Y = 0.0;
-			}
-			if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::TranslationZ)) {
-				RootBoneTranslation.Z = 0.0;
-			}
-			RootTransform.SetTranslation(RootBoneTranslation);
 		}
 
 		// Rotaion
 		if(EnumHasAnyFlags(Flags, EXXRootMotionRemoveFlag::Rotation)) {
 			FRotator BoneRotation = RootTransform.Rotator();
-			if(EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationRoll)) {
-				BoneRotation.Roll = 0.0;
+			if(!BoneRotation.IsNearlyZero()) {
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationRoll)) {
+					BoneRotation.Roll = 0.0;
+				}
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationPitch)) {
+					BoneRotation.Pitch = 0.0;
+				}
+				if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationYaw)) {
+					BoneRotation.Yaw = 0.0;
+				}
+				RootTransform.SetRotation(BoneRotation.Quaternion());
 			}
-			if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationPitch)) {
-				BoneRotation.Pitch = 0.0;
-			}
-			if (EnumHasAllFlags(Flags, EXXRootMotionRemoveFlag::RotationYaw)) {
-				BoneRotation.Yaw = 0.0;
-			}
-			RootTransform.SetRotation(BoneRotation.Quaternion());
+		}
+
+		if(RootTransformOrigin.Equals(RootTransform)) {
+			continue;
 		}
 
 		// Accumulate on child bones
@@ -150,15 +161,16 @@ bool FRootMotionRemoverByAnimSequenceData::RemoveRootMotion(EXXRootMotionRemoveF
 	for(int i=0; i<ChildBonesTransforms.Num(); ++i) {
 		bResult &= UpdateBoneTransform(ChildBoneNames[i], FrameRange, ChildBonesTransforms[i]);
 	}
-
-	// Mark as dirty for compressing.
-	bResult &= AnimSequence->MarkPackageDirty();
-	AnimSequence->PostEditChange();
+	if(bResult) {
+		// Mark as dirty for compressing.
+		bResult &= AnimSequence->MarkPackageDirty();
+		AnimSequence->PostEditChange();
+	}
 	return bResult;
 }
 
-bool FRootMotionRemoverByAnimSequenceData::RestoreRootMotion(int32 FrameStart, int32 FrameEnd) {
-	bool Result = false;
+bool FXXRootMotionRemover::RestoreRootMotion(int32 FrameStart, int32 FrameEnd) {
+	bool bResult = false;
 	if(BackupTransforms.Num()) {
 		FrameStart = FMath::Max(FrameStart, 0);
 		FrameEnd = FMath::Min(FrameEnd, BackupTransforms.Num());
@@ -182,19 +194,23 @@ bool FRootMotionRemoverByAnimSequenceData::RestoreRootMotion(int32 FrameStart, i
 						const FName BoneName = 0 == i ? RootBoneName : ChildBoneNames[i - 1];
 						UpdateBoneTransform(BoneName, FInt32Range(FrameRangeBegin, Frame), BoneTransforms[i]);
 					}
-					Result = true;
+					bResult = true;
 				}
 				FrameRangeBegin = Frame + 1;
 			}
 		}
 	}
-	if (!Result) {
+	if (bResult) {
+		bResult &= AnimSequence->MarkPackageDirty();
+		AnimSequence->PostEditChange();
+	}
+	else {
 		UE_LOG(XXAnimRootEditor, Warning, TEXT("[RestoreRootMotion] No backup transform for restoring!"));
 	}
-	return Result;
+	return bResult;
 }
 
-bool FRootMotionRemoverByAnimSequenceData::UpdateBoneTransform(FName BoneName, FInt32Range FrameRange, const TArray<FTransform>& Transforms) {
+bool FXXRootMotionRemover::UpdateBoneTransform(FName BoneName, FInt32Range FrameRange, const TArray<FTransform>& Transforms) {
 	TArray<FVector3f> PosKeys; PosKeys.Reserve(Transforms.Num());
 	TArray<FQuat4f> RotKeys; RotKeys.Reserve(Transforms.Num());
 	TArray<FVector3f> ScaleKeys; ScaleKeys.Reserve(Transforms.Num());

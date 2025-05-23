@@ -6,6 +6,7 @@
 #include "EditorViewportClient.h"
 #include "PreviewScene.h"
 
+class SCheckBox;
 class UAnimSequence;
 class FContentBrowserModule;
 class FAssetRegistryModule;
@@ -16,7 +17,7 @@ class UStaticMeshComponent;
 class UAnimPreviewInstance;
 class SSlider;
 class SMultiFlagsCheckBox;
-class IRootMotionRemover;
+class FXXRootMotionRemover;
 
 DECLARE_DELEGATE_OneParam(FViewportAnimTick, float)
 
@@ -25,12 +26,14 @@ class FXXAnimRootEditorViewportClient : public FEditorViewportClient {
 public:
 	FXXAnimRootEditorViewportClient(FPreviewScene* PreviewScene);
 	void SetAsset(UAnimSequence* AnimAsset);
+	void ResetPlay();
 	void ResetView();
 	virtual void Tick(float DeltaSeconds) override;
 	FViewportAnimTick& GetOnAnimTick();
 	void CameraFocus();
 	void SetPlaying(bool bPlaying);
 	void SetPlayTime(float InTime);
+	void SetCameraFollow(bool bFllow);
 private:
 	UDebugSkelMeshComponent* SklMeshComp;
 	UStaticMeshComponent* EditorFloorComp;
@@ -38,6 +41,7 @@ private:
 	FVector ArrowLastLocation;
 	float CameraDistance;// Distance to box center, for calculating location relative to mesh
 	FViewportAnimTick OnAnimTick;
+	bool CameraFollow;
 	UAnimPreviewInstance* GetAnimPreviewInstance();
 	void UpdateSklMeshTransform(); // Update transform by rootmotion
 };
@@ -53,7 +57,7 @@ public:
 	void SetPosition(float Position);
 private:
 	UAnimSequence* CurrentAnimAsset;
-	TUniquePtr<IRootMotionRemover> RootMotionRemover;
+	TUniquePtr<FXXRootMotionRemover> RootMotionRemover;
 	// The range for display is [FrameStart, FrameEnd]
 	int32 FrameStart;
 	int32 FrameEnd;
@@ -70,10 +74,11 @@ private:
 	void ManualPause();
 	void ManualReset(); // Call aflter modifying
 	void SetCurrentFrame(int InFrame);
-	FReply OnRemoveRootMotion();
-	FReply OnRestoreRootMotion();
 
 	// Trigger from widgets
+	FReply OnRemoveRootMotion();
+	FReply OnRestoreRootMotion();
+	void WidgetCameraFollowChanged(ECheckBoxState InState);
 	void WidgetSetCurrentFrame(float Value);
 	void WidgetPlayStateChanged(ECheckBoxState InState);
 	FReply WidgetPlayBack();
