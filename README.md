@@ -22,7 +22,7 @@ Get the plugin by clone repository or Download Zip, extract to the `Plugins` fol
 
 
 ## Animation Modifer
-Animation modifer is also available, by checking "XXRemoveRootMotionModifier".
+Animation modifer is also available, by adding "XXRemoveRootMotionModifier".
 
 ![image](https://github.com/user-attachments/assets/93f237be-b289-4282-9d0c-ee405e331506)
 
@@ -36,4 +36,4 @@ Modified:
 ![Attack_Release_Game_3](https://github.com/user-attachments/assets/3d5b092d-3fae-48e0-bc37-b72188dcab0c)
 
 # More Infomation
-reference to [https://zhuanlan.zhihu.com/p/1907297147545711776](https://zhuanlan.zhihu.com/p/1907297147545711776)
+Reference to [https://zhuanlan.zhihu.com/p/1907297147545711776](https://zhuanlan.zhihu.com/p/1907297147545711776)
