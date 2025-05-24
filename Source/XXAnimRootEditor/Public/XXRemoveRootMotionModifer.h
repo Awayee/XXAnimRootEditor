@@ -22,8 +22,9 @@ enum class EXXRemoveRootRotation : uint8 {
 ENUM_CLASS_FLAGS(EXXRemoveRootRotation);
 
 
+/** Remove root motion, while keep the final pose. */
 UCLASS()
-class UXXRemoveRootMotionModifer: public UAnimationModifier {
+class XXANIMROOTEDITOR_API UXXRemoveRootMotionModifer: public UAnimationModifier {
 	GENERATED_BODY()
 public:
 

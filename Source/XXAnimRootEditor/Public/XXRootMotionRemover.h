@@ -17,7 +17,7 @@ enum class EXXRootMotionRemoveFlag : uint8 {
 };
 ENUM_CLASS_FLAGS(EXXRootMotionRemoveFlag);
 
-class FXXRootMotionRemover{
+class XXANIMROOTEDITOR_API FXXRootMotionRemover{
 public:
 	FXXRootMotionRemover(UAnimSequence* InAnimSequence);
 	virtual ~FXXRootMotionRemover();
